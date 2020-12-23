@@ -321,6 +321,7 @@ struct _php_date_obj {
 #endif
 
 static void timecop_globals_ctor(zend_timecop_globals *globals TSRMLS_DC);
+static void timecop_getenv(TSRMLS_D);
 
 static int register_timecop_classes(TSRMLS_D);
 static int timecop_func_override(TSRMLS_D);
@@ -422,6 +423,7 @@ PHP_RINIT_FUNCTION(timecop)
 			return FAILURE;
 		}
 	}
+	timecop_getenv(TSRMLS_C);
 
 	return SUCCESS;
 }
@@ -459,6 +461,33 @@ PHP_MINFO_FUNCTION(timecop)
 	DISPLAY_INI_ENTRIES();
 }
 /* }}} */
+
+static void timecop_getenv(TSRMLS_D) {
+	struct tm tm;
+	time_t time;
+	tc_timeval now, mock_tv;
+	char *env_mode_travel = getenv("TIMECOP_MODE_TRAVEL");
+
+	if (env_mode_travel == NULL) {
+		return;
+	}
+
+	/* Use TIMECOP_MODE_TRAVEL */
+	strptime(env_mode_travel, "%Y-%m-%d %H:%M:%S", &tm);
+	time = mktime(&tm);
+
+	mock_tv.sec = time;
+	mock_tv.usec = 0;
+
+	TIMECOP_G(timecop_mode) = TIMECOP_MODE_TRAVEL;
+	get_current_time(&now TSRMLS_CC);
+	tc_timeval_sub(&TIMECOP_G(travel_offset), &mock_tv, &now);
+	TIMECOP_G(travel_origin) = now;
+
+	if (TIMECOP_G(sync_request_time)){
+		update_request_time(mock_tv.sec TSRMLS_CC);
+	}
+}
 
 static int register_timecop_classes(TSRMLS_D)
 {
